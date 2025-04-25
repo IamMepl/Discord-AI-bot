@@ -34,6 +34,12 @@ To run the bot
    python main.py
    ```
 
+Get Your Groq API key here:
+
+```bash
+https://console.groq.com/keys
+```
+
 ## Customization
 
 To change the model used by the bot, modify the model in `gpt_utils.py` file.
