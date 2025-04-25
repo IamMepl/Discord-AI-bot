@@ -39,6 +39,11 @@ Get Your Groq API key here:
 ```bash
 https://console.groq.com/keys
 ```
+## Hosting 24/7
+
+```bash
+https://uptimerobot.com/
+```
 
 ## Customization
 
