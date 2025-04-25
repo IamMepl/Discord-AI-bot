@@ -1,7 +1,7 @@
 Setup
 Clone the repository to your local machine:
 
-git clone https://github.com/IamMepl/Discord-AI-bot.git
+[git clone https://github.com/IamMepl/Discord-AI-bot.git](URL)
 Navigate to the project directory:
 
 cd Discord-AI-bot
