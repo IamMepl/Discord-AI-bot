@@ -1,4 +1,5 @@
 import os
+import discord
 import threading
 import time
 import json    
@@ -6,7 +7,7 @@ from gpt_utils import gpt_response
 from keep_alive import keep_alive
 keep_alive()
 from discord.ext import commands
-import discord
+from discord import app_commands
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -40,6 +41,7 @@ def config_loop():
 @bot.event
 async def on_ready():
     await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.listening, name='IamMepl'))
+    await bot.tree.sync()
     print(f'{bot.user.name} online!')
 
 @bot.event
@@ -65,17 +67,9 @@ async def on_message(message):
 @bot.command(name='ping')
 async def ping(ctx):
     await ctx.send(f'Pong! {round(bot.latency * 1000)}ms')
-
-@bot.command(name='help')
-async def help(ctx):
-    embed = discord.Embed(title='Help', description='List of available commands', color=0x00ff00)
-    embed.add_field(name='Commands', value='!ping', inline=False)
-    embed.add_field(name='Slash Commands', value='/register : register your channel id to database
-/unregister : remove your channel id from database', inline=False)
-    await ctx.send(embed=embed)
     
 @bot.tree.command(name='unregister', description='Remove your channel id from database')
-async def unsetchannel(interaction: discord.Interaction):
+async def unregister(interaction: discord.Interaction):
     guild_id = str(interaction.guild.id)
     channel_id = str(interaction.channel.id)
 
@@ -86,7 +80,7 @@ async def unsetchannel(interaction: discord.Interaction):
 
 
 @bot.tree.command(name='register', description='register your channel id to database')
-async def setchannel(interaction: discord.Interaction):
+async def register(interaction: discord.Interaction):
     guild_id = str(interaction.guild.id)
     channel_id = str(interaction.channel.id)
 
@@ -95,5 +89,8 @@ async def setchannel(interaction: discord.Interaction):
 
     if channel_id not in config[guild_id]:
         config[guild_id].append(channel_id)
+        save_config(config)
+        await interaction.response.send_message('This channel has been registered from the database.')
+        
 
 bot.run(TOKEN)
