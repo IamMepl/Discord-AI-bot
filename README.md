@@ -1,3 +1,5 @@
+![Mepl](https://avatars.githubusercontent.com/u/183921460?v=4)
+
 ## Setup
 
 1. Clone the repository to your local machine:
