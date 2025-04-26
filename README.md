@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/IamMepl/IamMepl/refs/heads/main/standard%20(1).gif" alt="IamMepl" />
+  <img src="https://raw.githubusercontent.com/IamMepl/IamMepl/refs/heads/main/static.png" />
 </p>
 
 ## Setup
