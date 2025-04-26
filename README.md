@@ -1,4 +1,6 @@
-![Mepl](https://raw.githubusercontent.com/IamMepl/IamMepl/refs/heads/main/standard%20(1).gif)
+<p align="center">
+<img src="https://raw.githubusercontent.com/IamMepl/IamMepl/refs/heads/main/standard%20(1).gif"/> 
+</p>
 
 ## Setup
 
