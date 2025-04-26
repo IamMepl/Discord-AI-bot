@@ -18,7 +18,7 @@
    pip install -r setup.txt
    ```
 
-4. Create a `.env` file similar to the sample.env in the root directory of the project and add your GROQ API key and Discord bot token:
+4. Create a `.env` and add your GROQ API key and Discord bot token:
 
    ```
    GROQ_API_KEY=your_groq_api_key
