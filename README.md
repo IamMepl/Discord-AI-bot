@@ -1,5 +1,5 @@
 <p align="center">
-<img src="https://djnpwlvjfuoc1.cloudfront.net/u4jnzm%2Fpreview%2F66577663%2Fmain_large.gif?response-content-disposition=inline%3Bfilename%3D%22main_large.gif%22%3B&response-content-type=image%2Fgif&Expires=1745685735&Signature=cK0YvAtR3xTD7NgS4WFFKrwmbujMtX-YWhqPv3t0VcRF2C1Bw-EitptZ9TVJuI1prLr822qhj3t3-C7Pr-z~oFfWkNBWG-K3MWjB84i0zdOXoDg0qiffbH~XZtifs7ObDTLkir0R8w42iXXx6L4boOHu9UFpggNuOCWzVYA4~Hk3jwNgp2ideVLOfVzwzqqEbhI0HNiSt5MNoqFBjKzA6XHl40idOgeA7iqVyh60RXtSlhmA4yX4-K9tappLwVPMVo45LfRHQhhLoGnb6XHK5cf5FkuXA7HvwCNDklmVDB6jXb~DSMtyeHUK~r4wmR8bcCvjwArgJ1Mp6uPcVjrx1g__&Key-Pair-Id=APKAJT5WQLLEOADKLHBQ"/> 
+  <img src="https://raw.githubusercontent.com/IamMepl/IamMepl/refs/heads/main/standard%20(1).gif" alt="IamMepl" />
 </p>
 
 ## Setup
