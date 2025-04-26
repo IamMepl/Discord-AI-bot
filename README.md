@@ -1,4 +1,4 @@
-![Mepl](https://avatars.githubusercontent.com/u/183921460?v=4)
+![Mepl](https://raw.githubusercontent.com/IamMepl/IamMepl/refs/heads/main/standard%20(1).gif)
 
 ## Setup
 
