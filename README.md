@@ -1,5 +1,6 @@
 
-# Discord AI Chatbot
+<h1 align="center">Discord AI Chatbot</h1>
+
 
 <p align="center">
 <img src="https://raw.githubusercontent.com/IamMepl/IamMepl/refs/heads/main/static.png"/>
