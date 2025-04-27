@@ -1,8 +1,9 @@
-<div align="center">
-<h1>Discord AI Chatbot</h1>
-<br />
 
-![Discord-AI-bot](https://raw.githubusercontent.com/IamMepl/IamMepl/refs/heads/main/static.png)
+# Discord AI Chatbot
+
+<p align="center">
+<img src="https://raw.githubusercontent.com/IamMepl/IamMepl/refs/heads/main/static.png"/>
+</p>
 
 ## Setup
 
