@@ -23,7 +23,7 @@
 3. Install dependencies:
 
    ```bash
-   pip install -r setup.txt
+   pip install -r requirements.txt
    ```
 
 4. Create a `.env` and add your GROQ API key and Discord bot token:
