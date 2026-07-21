@@ -16,6 +16,8 @@ keep_alive()
 load_dotenv()
 
 TOKEN = os.getenv('DISCORD_TOKEN')
+if not TOKEN:
+    raise RuntimeError('DISCORD_TOKEN is not set. Please add it to your .env file or environment variables.')
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -26,16 +28,58 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 def load_config():
     try:
         with open('config.json', 'r') as f:
-            return json.load(f)
+            config = json.load(f)
     except FileNotFoundError:
         return {}
+
+    for guild_id, guild_data in list(config.items()):
+        if isinstance(guild_data, list):
+            config[guild_id] = {"channels": guild_data}
+        elif isinstance(guild_data, dict) and "channels" not in guild_data:
+            config[guild_id] = {"channels": guild_data.get("channels", []), "language": guild_data.get("language")}
+    return config
 
 def save_config(config):
     with open('config.json', 'w') as f:
         json.dump(config, f)
 
+MAX_DISCORD_MESSAGE_LENGTH = 2000
+RANDOM_CHAT_CHANCE = 0.2
+
+def split_message(text, limit=MAX_DISCORD_MESSAGE_LENGTH):
+    chunks = []
+    while text:
+        if len(text) <= limit:
+            chunks.append(text)
+            break
+
+        split_at = text.rfind('\n', 0, limit)
+        if split_at == -1:
+            split_at = text.rfind(' ', 0, limit)
+        if split_at == -1:
+            split_at = limit
+
+        chunks.append(text[:split_at])
+        text = text[split_at:].lstrip()
+
+    return chunks
+
+async def send_long_message(channel, content):
+    if content is None:
+        return
+    for chunk in split_message(str(content)):
+        if chunk:
+            await channel.send(chunk)
+
 # Load awal untuk dipakai on_message
 config = load_config()
+
+
+def get_guild_language(guild_id):
+    guild_config = config.get(guild_id)
+    if isinstance(guild_config, dict):
+        return guild_config.get("language")
+    return None
 
 @bot.event
 async def on_ready():
@@ -49,27 +93,35 @@ async def on_ready():
 
 @bot.event
 async def on_message(message):
-    if message.author == bot.user:
+    if message.author == bot.user or message.author.bot:
+        return
+
+    if message.guild is None:
         return
 
     guild_id = str(message.guild.id)
     channel_id = str(message.channel.id)
     responded = False
 
-    if guild_id in config and channel_id in config[guild_id]:
+    is_registered_channel = guild_id in config and channel_id in config[guild_id].get("channels", [])
+    mention = bot.user.mentioned_in(message)
+    should_random_reply = not is_registered_channel and random.random() < RANDOM_CHAT_CHANCE
+
+    image_urls = [attachment.url for attachment in message.attachments if not attachment.content_type or attachment.content_type.startswith('image')]
+
+    if is_registered_channel or mention or should_random_reply:
         async with message.channel.typing():
             delay = random.uniform(1.5, 3.0)  # Random between 1.5 to 3 seconds
             await asyncio.sleep(delay)
-            await message.channel.send(gpt_response(message.content))
+            content = message.content
+            if mention:
+                content = message.content.replace(f'<@{bot.user.id}>', '').strip()
+            await send_long_message(
+                message.channel,
+                gpt_response(content, get_guild_language(guild_id), image_urls=image_urls)
+            )
         responded = True
 
-    if bot.user.mentioned_in(message) and not responded:
-        async with message.channel.typing():
-            delay = random.uniform(1.5, 3.0)
-            await asyncio.sleep(delay)
-            await message.channel.send(gpt_response(message.content.replace(f'<@{bot.user.id}>', '').strip()))
-        responded = True
-        
     await bot.process_commands(message)
 
 @bot.command(name='ping')
@@ -88,15 +140,16 @@ async def reloadconfig(interaction: discord.Interaction):
 
 @bot.tree.command(name='register', description='Register your channel id to database')
 async def register(interaction: discord.Interaction):
+    global config
     config = load_config()
     guild_id = str(interaction.guild.id)
     channel_id = str(interaction.channel.id)
 
-    if guild_id not in config:
-        config[guild_id] = []
+    if guild_id not in config or not isinstance(config[guild_id], dict):
+        config[guild_id] = {"channels": []}
 
-    if channel_id not in config[guild_id]:
-        config[guild_id].append(channel_id)
+    if channel_id not in config[guild_id]["channels"]:
+        config[guild_id]["channels"].append(channel_id)
         save_config(config)
         await interaction.response.send_message('This channel has been registered to the database.')
     else:
@@ -104,16 +157,50 @@ async def register(interaction: discord.Interaction):
 
 @bot.tree.command(name='unregister', description='Remove your channel id from database')
 async def unregister(interaction: discord.Interaction):
+    global config
     config = load_config()
     guild_id = str(interaction.guild.id)
     channel_id = str(interaction.channel.id)
 
-    if guild_id in config and channel_id in config[guild_id]:
-        config[guild_id].remove(channel_id)
+    if guild_id in config and channel_id in config[guild_id].get("channels", []):
+        config[guild_id]["channels"].remove(channel_id)
         save_config(config)
         await interaction.response.send_message('This channel has been removed from the database.')
     else:
         await interaction.response.send_message('This channel is not registered in the database.')
+
+@bot.tree.command(name='language', description='Set the bot response language for this server')
+async def language(interaction: discord.Interaction, language: str):
+    global config
+    config = load_config()
+    guild_id = str(interaction.guild.id)
+
+    if guild_id not in config or not isinstance(config[guild_id], dict):
+        config[guild_id] = {"channels": []}
+
+    config[guild_id]["language"] = language.strip()
+    save_config(config)
+    await interaction.response.send_message(
+        f'Bot response language set to `{config[guild_id]["language"]}` for this server.',
+        ephemeral=True
+    )
+
+@bot.tree.command(name='help', description='Show the bot command list')
+async def help_command(interaction: discord.Interaction):
+    commands_list = (
+        "**Bot Commands:**\n"
+        "/register - Register this channel for always-on replies.\n"
+        "/unregister - Stop the bot from always replying in this channel.\n"
+        "/language <language> - Set the response language for the server.\n"
+        "/help - Show this command list.\n"
+        "/wack - Reload the bot config.\n"
+        "/kick - Kick a member (requires permissions).\n"
+        "/ban - Ban a member (requires permissions).\n"
+        "/timeout - Timeout a member (requires permissions).\n"
+        "/purge <amount> - Delete multiple messages (requires permissions).\n"
+        "\nAlso: the bot may randomly join non-registered channels about 20% of the time."
+    )
+    await interaction.response.send_message(commands_list, ephemeral=True)
 
 @bot.tree.command(name="kick", description="Kicks a member from the server")
 @app_commands.describe(member="Member to kick", reason="Reason for kick")
