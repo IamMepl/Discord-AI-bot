@@ -116,9 +116,15 @@ async def on_message(message):
             content = message.content
             if mention:
                 content = message.content.replace(f'<@{bot.user.id}>', '').strip()
+            conversation_id = f'{guild_id}-{channel_id}'
             await send_long_message(
                 message.channel,
-                gpt_response(content, get_guild_language(guild_id), image_urls=image_urls)
+                gpt_response(
+                    content,
+                    get_guild_language(guild_id),
+                    image_urls=image_urls,
+                    conversation_id=conversation_id
+                )
             )
         responded = True
 

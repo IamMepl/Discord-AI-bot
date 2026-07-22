@@ -1,24 +1,22 @@
-
-<h1 align="center">Discord AI Chatbot</h1>
-
+# Discord AI Chatbot
 
 <p align="center">
-<img src="https://raw.githubusercontent.com/IamMepl/IamMepl/refs/heads/main/static.png"/>
+<img src="https://raw.githubusercontent.com/IamMepl/IamMepl/refs/heads/main/static.png" alt="Discord AI Bot" />
 </p>
 
 ## Setup
 
-1. Clone the repository to your local machine:
+1. Clone the repository:
 
    ```bash
    git clone https://github.com/IamMepl/Discord-AI-bot.git
    ```
 
-2. Navigate to the project directory:
+2. Enter the project folder:
 
-    ```bash
-    cd Discord-AI-bot
-    ```
+   ```bash
+   cd Discord-AI-bot
+   ```
 
 3. Install dependencies:
 
@@ -26,55 +24,78 @@
    pip install -r requirements.txt
    ```
 
-4. Create a `.env` and add your GROQ API key and Discord bot token:
+4. Create a `.env` file with:
 
-   ```
+   ```env
    GROQ_API_KEY=your_groq_api_key
    DISCORD_TOKEN=your_discord_token
    ```
+
 ## Usage
 
-*You can mention the bot or /register to start chat with the bot.*
-
-To run the bot
-
-   ```bash
-   python main.py
-   ```
-
-Get Your Groq API key here:
+Run the bot:
 
 ```bash
-https://console.groq.com/keys
+python main.py
 ```
+
+The bot supports:
+
+- Mention-based replies
+- Random chat replies in non-registered channels (~20% chance)
+- Language-specific replies with `/language`
+- Casual and slangy responses in multiple languages
+
+## Slash Commands
+
+Use `/help` in Discord to see the full command list. Available commands include:
+
+- `/help` - Show command list
+- `/register` - Register the current channel for bot replies
+- `/unregister` - Remove the current channel from registered bot replies
+- `/language <language>` - Set response language for the server
+- `/wack` - Reload the bot configuration
+- `/kick` - Kick a member (requires permissions)
+- `/ban` - Ban a member (requires permissions)
+- `/timeout` - Timeout a member (requires permissions)
+- `/purge <amount>` - Delete multiple messages (requires permissions)
+
+## AI Mode
+
+This bot runs in a casual AI chat mode:
+
+- Uses the GROQ API with `openai/gpt-oss-safeguard-20b` by default
+- Responds with a playful tone and light jokes
+
+## Available GROQ Models
+
+This bot is currently configured to use the free model:
+
+- `openai/gpt-oss-safeguard-20b` — Safety GPT OSS 20B
+
+Model availability may vary by account and permissions.
+
+## Model Customization
+
+The active model is configured in `gpt_utils.py`. You can change it there if you want to use another GROQ-supported model.
+
+## Requirements
+
+Install the required packages from `requirements.txt`.
+
 ## Hosting 24/7
 
-```bash
-https://uptimerobot.com/
-```
-
-## Customization
-
-To change the model used by the bot, modify the model in `gpt_utils.py` file.
-
-Available Options are:
-- LLaMA3 8b    : "llama3-8b-8192"
-- LLaMA3 70b   : "llama3-70b-8192"
-- Mixtral 8x7b : "mixtral-8x7b-32768"
-- Gemma 7b     : "gemma-7b-it"
-
-Groq API is easily replacable with OpenAI's GPT API without major code modifications.
+Use services like UptimeRobot to keep your bot alive if you host it on a remote server.
 
 ## Features
 
-- Responds to messages using a Large Language Model (LLM).
-- Maintains context for up to 10 conversation messages.
-- Utilizes the GROQ API internally.
-- Requires users to set up their GROQ API key and Discord bot token.
+- Multi-language response support via `/language`
+- Non-registered channels may get random chat replies
+- Uses GROQ API and `discord.py` for Discord integration
 
 ## Contributing
 
-Contributions are welcome! Please fork the repository and submit pull requests.
+Contributions are welcome! Fork the project and submit a pull request.
 
 ## License
 
