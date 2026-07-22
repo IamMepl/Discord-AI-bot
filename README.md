@@ -44,28 +44,44 @@ The bot supports:
 - Mention-based replies
 - Random chat replies in non-registered channels (~20% chance)
 - Language-specific replies with `/language`
-- Casual and slangy responses in multiple languages
+- Separate conversation memory per channel, so chats in different channels/servers don't mix together
 
 ## Slash Commands
 
-Use `/help` in Discord to see the full command list. Available commands include:
+Use `/help` in Discord to see the full command list (shown as a rich embed, grouped by category). Available commands include:
 
-- `/help` - Show command list
-- `/register` - Register the current channel for bot replies
-- `/unregister` - Remove the current channel from registered bot replies
+**Chat**
+- `/register` - Register the current channel for always-on bot replies
+- `/unregister` - Remove the current channel from always-on bot replies
+- `/reset` - Make the bot forget this channel's conversation so far
 - `/language <language>` - Set response language for the server
-- `/wack` - Reload the bot configuration
-- `/kick` - Kick a member (requires permissions)
-- `/ban` - Ban a member (requires permissions)
-- `/timeout` - Timeout a member (requires permissions)
-- `/purge <amount>` - Delete multiple messages (requires permissions)
+
+**Utility**
+- `/help` - Show the command list
+- `/ping` - Check the bot's latency
+- `/uptime` - See how long the bot has been running
+- `/wack` - Reload the bot configuration from disk (admin only)
+
+**Moderation** (each requires the relevant Discord permission)
+- `/kick` - Kick a member
+- `/ban` - Ban a member
+- `/timeout` - Timeout a member
+- `/purge <amount>` - Delete multiple messages (1-100)
 
 ## AI Mode
 
 This bot runs in a casual AI chat mode:
 
 - Uses the GROQ API with `openai/gpt-oss-safeguard-20b` by default
-- Responds with a playful tone and light jokes
+- Responds with a playful, natural tone -- like chatting with a friend, not a formal assistant
+- Casual/slang phrasing is generated naturally by the model itself based on the conversation's language and vibe, rather than applied through fixed word-substitution rules
+- Keeps a separate conversation history per channel (up to the last 20 messages) so context doesn't leak between different channels or servers
+
+## Reliability & Permissions
+
+- Moderation commands (`/kick`, `/ban`, `/timeout`, `/purge`) and `/wack` 
+- All slash commands share a centralized error handler, so failures show a clear message instead of a generic "interaction failed"
+- Config reads/writes are protected with a lock to avoid two servers' changes overwriting each other
 
 ## Available GROQ Models
 
@@ -91,6 +107,9 @@ Use services like UptimeRobot to keep your bot alive if you host it on a remote 
 
 - Multi-language response support via `/language`
 - Non-registered channels may get random chat replies
+- Per-channel conversation memory (no context bleed between channels/servers), resettable with `/reset`
+- Uptime tracking via `/uptime`
+- Enforced permission checks and centralized error handling for all slash commands
 - Uses GROQ API and `discord.py` for Discord integration
 
 ## Contributing

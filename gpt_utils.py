@@ -25,6 +25,8 @@ BASE_SYSTEM_PROMPT = (
     "question, just answer it without padding."
 )
 
+# Per-conversation history so different channels/servers don't bleed into each other.
+# Keyed by a conversation id (e.g. "guildid-channelid"); falls back to "default" if none given.
 conversation_histories = {}
 MAX_HISTORY = 20
 MAX_TRACKED_CONVERSATIONS = 200
@@ -38,6 +40,12 @@ def _get_history(conversation_id):
             del conversation_histories[oldest_key]
         conversation_histories[key] = []
     return conversation_histories[key]
+
+
+def clear_history(conversation_id):
+    """Forget the stored conversation for this id. Returns True if there was anything to forget."""
+    key = conversation_id or "default"
+    return conversation_histories.pop(key, None) is not None
 
 
 def gpt_response(message, language=None, image_urls=None, conversation_id=None):

@@ -1,12 +1,10 @@
 import os
 import discord
-import threading
-import time
 import json
 import datetime
 import random
 import asyncio
-from gpt_utils import gpt_response
+from gpt_utils import gpt_response, clear_history
 from keep_alive import keep_alive
 from discord.ext import commands
 from discord import app_commands
@@ -21,9 +19,10 @@ if not TOKEN:
 
 intents = discord.Intents.default()
 intents.message_content = True
-intents.members = True  # slash command
+intents.members = True  # needed for kick/ban/timeout targets
 
 bot = commands.Bot(command_prefix='!', intents=intents)
+START_TIME = datetime.datetime.now(datetime.timezone.utc)
 
 def load_config():
     try:
@@ -73,6 +72,9 @@ async def send_long_message(channel, content):
 
 # Load awal untuk dipakai on_message
 config = load_config()
+# Guards read-modify-write access to `config` so concurrent slash commands
+# (e.g. from two different servers at once) can't clobber each other's changes.
+config_lock = asyncio.Lock()
 
 
 def get_guild_language(guild_id):
@@ -83,7 +85,7 @@ def get_guild_language(guild_id):
 
 @bot.event
 async def on_ready():
-    await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.listening, name='IamMepl'))
+    await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.listening, name='you • /help'))
     print(f'{bot.user.name} online!')
     try:
         synced = await bot.tree.sync()
@@ -101,7 +103,6 @@ async def on_message(message):
 
     guild_id = str(message.guild.id)
     channel_id = str(message.channel.id)
-    responded = False
 
     is_registered_channel = guild_id in config and channel_id in config[guild_id].get("channels", [])
     mention = bot.user.mentioned_in(message)
@@ -126,167 +127,237 @@ async def on_message(message):
                     conversation_id=conversation_id
                 )
             )
-        responded = True
 
     await bot.process_commands(message)
 
-@bot.command(name='ping')
-async def ping(ctx):
-    await ctx.send(f'Pong! {round(bot.latency * 1000)}ms')
-    
-@bot.tree.command(name='wack', description='To reload new data')
-@commands.has_permissions(administrator=True)
+# --- Centralized error handling for all slash commands ---
+# Avoids repeating try/except blocks in every command and makes sure the user
+# always gets a readable message instead of Discord's generic "interaction failed".
+@bot.tree.error
+async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    original = getattr(error, 'original', error)
+
+    if isinstance(error, app_commands.MissingPermissions):
+        message = "You don't have permission to use this command."
+    elif isinstance(error, app_commands.BotMissingPermissions):
+        message = "I don't have the permissions I need to do that."
+    elif isinstance(error, app_commands.CommandOnCooldown):
+        message = f"Slow down a bit! Try again in {error.retry_after:.1f}s."
+    elif isinstance(original, discord.Forbidden):
+        message = "I don't have permission to do that."
+    else:
+        print(f"Unhandled app command error in /{interaction.command.name if interaction.command else '?'}: {error}")
+        message = "Something went wrong running that command."
+
+    try:
+        if interaction.response.is_done():
+            await interaction.followup.send(message, ephemeral=True)
+        else:
+            await interaction.response.send_message(message, ephemeral=True)
+    except discord.HTTPException:
+        pass
+
+@bot.tree.command(name='ping', description="Check the bot's latency")
+async def ping(interaction: discord.Interaction):
+    await interaction.response.send_message(f'Pong! {round(bot.latency * 1000)}ms')
+
+@bot.tree.command(name='uptime', description='Show how long the bot has been running')
+async def uptime(interaction: discord.Interaction):
+    delta = datetime.datetime.now(datetime.timezone.utc) - START_TIME
+    days, remainder = divmod(int(delta.total_seconds()), 86400)
+    hours, remainder = divmod(remainder, 3600)
+    minutes, seconds = divmod(remainder, 60)
+
+    parts = []
+    if days:
+        parts.append(f"{days}d")
+    if hours:
+        parts.append(f"{hours}h")
+    if minutes:
+        parts.append(f"{minutes}m")
+    parts.append(f"{seconds}s")
+
+    await interaction.response.send_message(f"I've been up for {' '.join(parts)}.", ephemeral=True)
+
+@bot.tree.command(name='wack', description='Reload the bot configuration from disk (admin only)')
+@app_commands.checks.has_permissions(administrator=True)
 async def reloadconfig(interaction: discord.Interaction):
     global config
-    config = load_config()
-
     await interaction.response.defer(ephemeral=True)  # Hold the response first, give a "thinking..." animation
-    await discord.utils.sleep_until(discord.utils.utcnow() + datetime.timedelta(seconds=2))  # Delay 2 seconds 
-    await interaction.followup.send("Uhh.. my head hurt 🤕", ephemeral=True)
+    async with config_lock:
+        config = load_config()
+    await asyncio.sleep(1.5)
+    await interaction.followup.send("Uhh.. my head hurt 🤕 (config reloaded)", ephemeral=True)
 
-@bot.tree.command(name='register', description='Register your channel id to database')
+@bot.tree.command(name='register', description='Register the current channel for always-on bot replies')
 async def register(interaction: discord.Interaction):
-    global config
-    config = load_config()
+    if interaction.guild is None:
+        await interaction.response.send_message("This command only works inside a server.", ephemeral=True)
+        return
+
     guild_id = str(interaction.guild.id)
     channel_id = str(interaction.channel.id)
 
-    if guild_id not in config or not isinstance(config[guild_id], dict):
-        config[guild_id] = {"channels": []}
+    async with config_lock:
+        if guild_id not in config or not isinstance(config[guild_id], dict):
+            config[guild_id] = {"channels": []}
 
-    if channel_id not in config[guild_id]["channels"]:
-        config[guild_id]["channels"].append(channel_id)
-        save_config(config)
-        await interaction.response.send_message('This channel has been registered to the database.')
-    else:
+        already_registered = channel_id in config[guild_id]["channels"]
+        if not already_registered:
+            config[guild_id]["channels"].append(channel_id)
+            save_config(config)
+
+    if already_registered:
         await interaction.response.send_message('This channel is already registered.')
+    else:
+        await interaction.response.send_message('This channel has been registered to the database.')
 
-@bot.tree.command(name='unregister', description='Remove your channel id from database')
+@bot.tree.command(name='unregister', description='Remove the current channel from always-on bot replies')
 async def unregister(interaction: discord.Interaction):
-    global config
-    config = load_config()
+    if interaction.guild is None:
+        await interaction.response.send_message("This command only works inside a server.", ephemeral=True)
+        return
+
     guild_id = str(interaction.guild.id)
     channel_id = str(interaction.channel.id)
 
-    if guild_id in config and channel_id in config[guild_id].get("channels", []):
-        config[guild_id]["channels"].remove(channel_id)
-        save_config(config)
+    async with config_lock:
+        was_registered = guild_id in config and channel_id in config[guild_id].get("channels", [])
+        if was_registered:
+            config[guild_id]["channels"].remove(channel_id)
+            save_config(config)
+
+    if was_registered:
         await interaction.response.send_message('This channel has been removed from the database.')
     else:
         await interaction.response.send_message('This channel is not registered in the database.')
 
 @bot.tree.command(name='language', description='Set the bot response language for this server')
 async def language(interaction: discord.Interaction, language: str):
-    global config
-    config = load_config()
+    if interaction.guild is None:
+        await interaction.response.send_message("This command only works inside a server.", ephemeral=True)
+        return
+
+    clean_language = language.strip()
+    if not clean_language:
+        await interaction.response.send_message("Please provide an actual language, like `English` or `Indonesian`.", ephemeral=True)
+        return
+
     guild_id = str(interaction.guild.id)
 
-    if guild_id not in config or not isinstance(config[guild_id], dict):
-        config[guild_id] = {"channels": []}
+    async with config_lock:
+        if guild_id not in config or not isinstance(config[guild_id], dict):
+            config[guild_id] = {"channels": []}
+        config[guild_id]["language"] = clean_language
+        save_config(config)
 
-    config[guild_id]["language"] = language.strip()
-    save_config(config)
     await interaction.response.send_message(
-        f'Bot response language set to `{config[guild_id]["language"]}` for this server.',
+        f'Bot response language set to `{clean_language}` for this server.',
         ephemeral=True
     )
 
+@bot.tree.command(name='reset', description="Make the bot forget this channel's conversation so far")
+async def reset(interaction: discord.Interaction):
+    if interaction.guild is None:
+        await interaction.response.send_message("This command only works inside a server.", ephemeral=True)
+        return
+
+    conversation_id = f'{interaction.guild.id}-{interaction.channel.id}'
+    cleared = clear_history(conversation_id)
+
+    if cleared:
+        await interaction.response.send_message("Alright, clean slate — I forgot our conversation here.", ephemeral=True)
+    else:
+        await interaction.response.send_message("There's nothing to forget yet in this channel.", ephemeral=True)
+
 @bot.tree.command(name='help', description='Show the bot command list')
 async def help_command(interaction: discord.Interaction):
-    commands_list = (
-        "**Bot Commands:**\n"
-        "/register - Register this channel for always-on replies.\n"
-        "/unregister - Stop the bot from always replying in this channel.\n"
-        "/language <language> - Set the response language for the server.\n"
-        "/help - Show this command list.\n"
-        "/wack - Reload the bot config.\n"
-        "/kick - Kick a member (requires permissions).\n"
-        "/ban - Ban a member (requires permissions).\n"
-        "/timeout - Timeout a member (requires permissions).\n"
-        "/purge <amount> - Delete multiple messages (requires permissions).\n"
-        "\nAlso: the bot may randomly join non-registered channels about 20% of the time."
+    embed = discord.Embed(
+        title="Mepl — Command List",
+        description="Mention me or chat in a registered channel and I'll talk back naturally. Here's everything else I can do:",
+        color=discord.Color.blurple()
     )
-    await interaction.response.send_message(commands_list, ephemeral=True)
+    if bot.user and bot.user.display_avatar:
+        embed.set_thumbnail(url=bot.user.display_avatar.url)
+
+    embed.add_field(
+        name="💬 Chat",
+        value=(
+            "`/register` — Always reply in this channel\n"
+            "`/unregister` — Stop always-replying here\n"
+            "`/reset` — Forget this channel's conversation so far\n"
+            "`/language <language>` — Set my reply language for this server"
+        ),
+        inline=False
+    )
+    embed.add_field(
+        name="🛠️ Utility",
+        value=(
+            "`/help` — Show this list\n"
+            "`/ping` — Check my latency\n"
+            "`/uptime` — See how long I've been running\n"
+            "`/wack` — Reload my config from disk (admin only)"
+        ),
+        inline=False
+    )
+    embed.add_field(
+        name="🛡️ Moderation",
+        value=(
+            "`/kick` — Kick a member\n"
+            "`/ban` — Ban a member\n"
+            "`/timeout` — Timeout a member\n"
+            "`/purge <amount>` — Delete multiple messages"
+        ),
+        inline=False
+    )
+    embed.set_footer(text=f"I'll also randomly jump into unregistered channels about {int(RANDOM_CHAT_CHANCE * 100)}% of the time.")
+
+    await interaction.response.send_message(embed=embed, ephemeral=True)
 
 @bot.tree.command(name="kick", description="Kicks a member from the server")
 @app_commands.describe(member="Member to kick", reason="Reason for kick")
-@commands.has_permissions(kick_members=True)
+@app_commands.checks.has_permissions(kick_members=True)
 async def kick(interaction: discord.Interaction, member: discord.Member, reason: str = None):
-    try:
-        if not interaction.user.guild_permissions.kick_members:
-            await interaction.response.send_message("You don't have permission to kick members!", ephemeral=True)
-            return
-
-        await member.kick(reason=reason)
-        await interaction.response.send_message(
-            f"{member.display_name} has been kicked. Reason: {reason or 'No reason provided'}"
-        )
-    except discord.Forbidden:
-        await interaction.response.send_message("I don't have permission to kick that member!", ephemeral=True)
-    except Exception as e:
-        await interaction.response.send_message(f"Error: {str(e)}", ephemeral=True)
+    await member.kick(reason=reason)
+    await interaction.response.send_message(
+        f"{member.display_name} has been kicked. Reason: {reason or 'No reason provided'}"
+    )
 
 @bot.tree.command(name="ban", description="Bans a member from the server")
 @app_commands.describe(member="Member to ban", reason="Reason for ban")
-@commands.has_permissions(ban_members=True)
+@app_commands.checks.has_permissions(ban_members=True)
 async def ban(interaction: discord.Interaction, member: discord.Member, reason: str = None):
-    try:
-        if not interaction.user.guild_permissions.ban_members:
-            await interaction.response.send_message("You don't have permission to ban members!", ephemeral=True)
-            return
-
-        await member.ban(reason=reason)
-        await interaction.response.send_message(
-            f"{member.display_name} has been banned. Reason: {reason or 'No reason provided'}"
-        )
-    except discord.Forbidden:
-        await interaction.response.send_message("I don't have permission to ban that member!", ephemeral=True)
-    except Exception as e:
-        await interaction.response.send_message(f"Error: {str(e)}", ephemeral=True)
+    await member.ban(reason=reason)
+    await interaction.response.send_message(
+        f"{member.display_name} has been banned. Reason: {reason or 'No reason provided'}"
+    )
 
 @bot.tree.command(name="timeout", description="Timeouts a member")
 @app_commands.describe(member="Member to timeout", duration="Duration in seconds (max 28 days)", reason="Reason for timeout")
-@commands.has_permissions(moderate_members=True)
+@app_commands.checks.has_permissions(moderate_members=True)
 async def timeout(interaction: discord.Interaction, member: discord.Member, duration: int, reason: str = None):
-    try:
-        if not interaction.user.guild_permissions.moderate_members:
-            await interaction.response.send_message("You don't have permission to timeout members!", ephemeral=True)
-            return
+    if duration < 1:
+        await interaction.response.send_message("Duration must be at least 1 second!", ephemeral=True)
+        return
 
-        if duration > 2419200:  # 28 days in seconds
-            duration = 2419200
-        
-        await member.timeout(discord.utils.utcnow() + datetime.timedelta(seconds=duration), reason=reason)
-        await interaction.response.send_message(
-            f"{member.display_name} has been timed out for {duration} seconds. Reason: {reason or 'No reason provided'}"
-        )
-    except discord.Forbidden:
-        await interaction.response.send_message("I don't have permission to timeout that member!", ephemeral=True)
-    except Exception as e:
-        await interaction.response.send_message(f"Error: {str(e)}", ephemeral=True)
+    duration = min(duration, 2419200)  # cap at 28 days
+    await member.timeout(discord.utils.utcnow() + datetime.timedelta(seconds=duration), reason=reason)
+    await interaction.response.send_message(
+        f"{member.display_name} has been timed out for {duration} seconds. Reason: {reason or 'No reason provided'}"
+    )
 
 @bot.tree.command(name="purge", description="Delete multiple messages at once")
 @app_commands.describe(amount="Number of messages to delete (1-100)")
-@commands.has_permissions(manage_messages=True)
+@app_commands.checks.has_permissions(manage_messages=True)
 async def purge(interaction: discord.Interaction, amount: int):
-    try:
-        if not interaction.user.guild_permissions.manage_messages:
-            await interaction.response.send_message("You don't have permission to purge messages!", ephemeral=True)
-            return
+    if amount < 1 or amount > 100:
+        await interaction.response.send_message("Amount must be between 1-100!", ephemeral=True)
+        return
 
-        if amount < 1 or amount > 100:
-            await interaction.response.send_message("Amount must be between 1-100!", ephemeral=True)
-            return
-
-        await interaction.response.defer(ephemeral=True)
-        deleted = await interaction.channel.purge(limit=amount + 1)
-        await interaction.followup.send(
-            f"Deleted {len(deleted)-1} messages", 
-            ephemeral=True
-        )
-    except discord.Forbidden:
-        await interaction.response.send_message("I don't have permission to purge messages!", ephemeral=True)
-    except Exception as e:
-        await interaction.response.send_message(f"Error: {str(e)}", ephemeral=True)
+    await interaction.response.defer(ephemeral=True)
+    # No `+1` here: unlike a prefix command, a slash command doesn't post its own
+    # message in the channel, so there's nothing extra to account for.
+    deleted = await interaction.channel.purge(limit=amount)
+    await interaction.followup.send(f"Deleted {len(deleted)} messages", ephemeral=True)
 
 bot.run(TOKEN)
