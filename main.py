@@ -85,7 +85,7 @@ def get_guild_language(guild_id):
 
 @bot.event
 async def on_ready():
-    await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.listening, name='you • /help'))
+    await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.listening, name='IamMepl'))
     print(f'{bot.user.name} online!')
     try:
         synced = await bot.tree.sync()
@@ -124,15 +124,13 @@ async def on_message(message):
                     content,
                     get_guild_language(guild_id),
                     image_urls=image_urls,
-                    conversation_id=conversation_id
+                    conversation_id=conversation_id,
+                    author_name=message.author.display_name
                 )
             )
 
     await bot.process_commands(message)
 
-# --- Centralized error handling for all slash commands ---
-# Avoids repeating try/except blocks in every command and makes sure the user
-# always gets a readable message instead of Discord's generic "interaction failed".
 @bot.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
     original = getattr(error, 'original', error)
@@ -354,9 +352,6 @@ async def purge(interaction: discord.Interaction, amount: int):
         await interaction.response.send_message("Amount must be between 1-100!", ephemeral=True)
         return
 
-    await interaction.response.defer(ephemeral=True)
-    # No `+1` here: unlike a prefix command, a slash command doesn't post its own
-    # message in the channel, so there's nothing extra to account for.
     deleted = await interaction.channel.purge(limit=amount)
     await interaction.followup.send(f"Deleted {len(deleted)} messages", ephemeral=True)
 
