@@ -1,6 +1,6 @@
 import os
 from dotenv import load_dotenv
-from groq import Groq
+from groq import AsyncGroq
 
 load_dotenv()
 
@@ -8,7 +8,7 @@ api_key = os.getenv("GROQ_API_KEY")
 if not api_key:
     raise RuntimeError("GROQ_API_KEY is not set. Please add it to your .env file or environment variables.")
 
-client = Groq(api_key=api_key)
+client = AsyncGroq(api_key=api_key)
 
 BASE_SYSTEM_PROMPT = (
     "Your name is Mepl. If someone asks your name, who you are, or what you're called, tell them your name "
@@ -29,7 +29,14 @@ BASE_SYSTEM_PROMPT = (
     "what they just said (don't contradict yourself by ruling something out and then suggesting it anyway). "
     "Avoid generic advice-column wrap-up lines -- the kind that start with 'the important thing is...', "
     "'just remember to...', or 'as long as it feels natural...' -- real friends don't talk like a self-help "
-    "caption, they just say what they think. "
+    "caption, they just say what they think. This also applies when someone vents about another person "
+    "(a friend, partner, family member): don't respond with a checklist of possible reasons why that other "
+    "person might be acting that way ('maybe they want X, or maybe they just...'). Actually engage with what "
+    "they told you -- react, take a side if it makes sense, tease them, agree, or push back, whatever a real "
+    "friend would naturally do -- instead of staying neutral by listing out every possible interpretation. "
+    "Keep the whole reply as one connected thought instead of stitching together a few disconnected "
+    "observations, and don't repeat a word or phrase for filler emphasis (like 'ya kayaknya kayaknya') -- "
+    "say it once and move on. "
     "This is a shared server channel, not a 1-on-1 DM -- more than one person can talk to you in the same "
     "conversation. Every user message below is prefixed with the sender's name, like 'Name: message', so you "
     "can tell who's who. Pay attention to those names: don't assume two messages came from the same person "
@@ -61,7 +68,7 @@ def clear_history(conversation_id):
     return conversation_histories.pop(key, None) is not None
 
 
-def gpt_response(message, language=None, image_urls=None, conversation_id=None, author_name=None):
+async def gpt_response(message, language=None, image_urls=None, conversation_id=None, author_name=None):
     history = _get_history(conversation_id)
 
     if image_urls:
@@ -85,9 +92,11 @@ def gpt_response(message, language=None, image_urls=None, conversation_id=None, 
             "content": f"Reply in {language}, using natural, everyday phrasing a native speaker would actually use."
         })
 
-    response = client.chat.completions.create(
-        model="openai/gpt-oss-safeguard-20b",
-        messages=prompt_messages + history
+    response = await client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=prompt_messages + history,
+        temperature=0.85,
+        frequency_penalty=0.4
     )
 
     assistant_content = response.choices[0].message.content
